@@ -746,10 +746,23 @@ footer{background:#111;padding:3rem 5rem;display:grid;grid-template-columns:2fr 
                 </div>
                 <div id="chatActiveScore" style="margin-left:auto;background:var(--green-light);color:var(--green-dark);font-size:12px;font-weight:600;padding:4px 12px;border-radius:var(--radius-pill);"></div>
               </div>
-              <!-- Input อยู่ใต้ชื่อทันที -->
-              <div class="chat-input-area" style="border-top:none;border-bottom:1px solid var(--border);">
-                <input class="chat-input-field" id="chatMsgInput" placeholder="พิมพ์ข้อความ..." onkeydown="if(event.key==='Enter')sendChatMsg()">
-                <button class="chat-send-btn" onclick="sendChatMsg()">↑</button>
+
+              <!-- Input bar with emoji + image -->
+              <div style="border-bottom:1px solid var(--border);background:var(--bg-card);">
+                <!-- Emoji picker popup -->
+                <div id="emojiPicker" style="display:none;position:absolute;z-index:999;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 24px rgba(0,0,0,.12);padding:10px;width:300px;flex-wrap:wrap;gap:4px;">
+                  <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px;font-weight:600;">EMOJI</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:2px;">
+                    ${['😀','😂','😍','🥰','😊','😎','🤩','😭','😅','🤣','❤️','🧡','💛','💚','💙','💜','🖤','🤍','💔','💕','🔥','⭐','✨','🎉','🎊','👍','👎','👏','🙏','🤝','💪','🫶','🤗','😘','🥳','🤔','😤','😠','😱','😴','🙄','😏','🥺','😢','😩','🤮','🤑','🤫','🫡','😇','🤓','👀','💯','✅','❌','⚡','🌟','💎','🏠','🔑','📱','💬','📸','🎵'].map(e=>`<span onclick="insertEmoji('${e}')" style="font-size:22px;cursor:pointer;padding:4px;border-radius:6px;transition:background .15s;" onmouseover="this.style.background='var(--bg-surface)'" onmouseout="this.style.background='transparent'">${e}</span>`).join('')}
+                  </div>
+                </div>
+                <div class="chat-input-area" style="border-top:none;">
+                  <button onclick="toggleEmojiPicker()" style="background:none;border:none;font-size:22px;cursor:pointer;padding:0 4px;line-height:1;color:var(--text-muted);transition:transform .2s;" title="Emoji" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">😊</button>
+                  <button onclick="document.getElementById('chatImgInput').click()" style="background:none;border:none;font-size:20px;cursor:pointer;padding:0 4px;line-height:1;color:var(--text-muted);transition:transform .2s;" title="ส่งรูปภาพ" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">🖼️</button>
+                  <input type="file" id="chatImgInput" accept="image/*" style="display:none;" onchange="sendChatImage(this)">
+                  <input class="chat-input-field" id="chatMsgInput" placeholder="พิมพ์ข้อความ..." onkeydown="if(event.key==='Enter'&&!event.shiftKey)sendChatMsg()" oninput="closePickers()">
+                  <button class="chat-send-btn" onclick="sendChatMsg()" title="ส่ง">↑</button>
+                </div>
               </div>
               <div class="chat-msgs-area" id="chatMsgsArea"></div>
             </div>
@@ -1560,14 +1573,31 @@ window.loadChatList=async function(){
       const ini=oName.slice(0,2).toUpperCase();
       const[bg,fg]=avColors[Math.abs(oid.charCodeAt(0))%5].split(':');
       const unread=_unreadCounts[d.id]||0;
+      // Format timestamp
+      let timeStr='';
+      if(data.lastUpdated||data.ts){
+        const t=data.lastUpdated?.toDate?data.lastUpdated.toDate():data.ts?.toDate?data.ts.toDate():null;
+        if(t){
+          const now=new Date();
+          const diff=now-t;
+          if(diff<60000) timeStr='เมื่อกี้';
+          else if(diff<3600000) timeStr=Math.floor(diff/60000)+'น.ที่แล้ว';
+          else if(diff<86400000) timeStr=t.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+          else if(diff<604800000) timeStr=['อา','จ','อ','พ','พฤ','ศ','ส'][t.getDay()];
+          else timeStr=t.toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+        }
+      }
       return`<div class="chat-list-item${d.id===activeChatId?' active':''}" onclick="clearUnread('${d.id}');openChatWindow('${d.id}','${oid}','${oName.replace(/'/g,'')}','${oPhoto}','')">
         ${oPhoto?`<img src="${oPhoto}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" referrerpolicy="no-referrer">`:`<div class="cli-av" style="background:${bg};color:${fg};">${ini}</div>`}
         <div style="flex:1;overflow:hidden;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <div class="cli-name" style="${unread>0?'font-weight:700;color:var(--text);':''}">${oName}</div>
+            <span style="font-size:10px;color:var(--text-faint);flex-shrink:0;margin-left:4px;">${timeStr}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div class="cli-preview" style="${unread>0?'color:var(--text);font-weight:500;':''}">${data.lastMsg||'เริ่มสนทนา...'}</div>
             ${unread>0?`<span style="background:#EF4444;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;flex-shrink:0;">${unread}</span>`:''}
           </div>
-          <div class="cli-preview" style="${unread>0?'color:var(--text);font-weight:500;':''}">${data.lastMsg||'เริ่มสนทนา...'}</div>
         </div>
       </div>`;
     }));
@@ -1581,6 +1611,51 @@ window.loadChatList=async function(){
 window.clearUnread=function(cid){
   _unreadCounts[cid]=0;
   _updateUnreadBadge();
+};
+
+// ── EMOJI & IMAGE ──
+window.toggleEmojiPicker=function(){
+  const p=document.getElementById('emojiPicker');
+  if(!p)return;
+  const inp=document.getElementById('chatMsgInput');
+  // Position above input
+  const rect=inp.getBoundingClientRect();
+  p.style.bottom=(window.innerHeight-rect.top+8)+'px';
+  p.style.left=rect.left+'px';
+  p.style.display=p.style.display==='flex'?'none':'flex';
+  p.style.flexDirection='column';
+};
+window.insertEmoji=function(e){
+  const inp=document.getElementById('chatMsgInput');
+  if(!inp)return;
+  const pos=inp.selectionStart||inp.value.length;
+  inp.value=inp.value.slice(0,pos)+e+inp.value.slice(pos);
+  inp.focus();
+  inp.selectionStart=inp.selectionEnd=pos+e.length;
+};
+window.closePickers=function(){
+  const p=document.getElementById('emojiPicker');if(p)p.style.display='none';
+};
+document.addEventListener('click',function(e){
+  const p=document.getElementById('emojiPicker');
+  if(p&&!e.target.closest('[onclick="toggleEmojiPicker()"]')&&!p.contains(e.target)) p.style.display='none';
+});
+
+window.sendChatImage=async function(input){
+  const user=window._currentUser;if(!user||!activeChatId)return;
+  const file=input.files[0];if(!file)return;
+  if(file.size>5*1024*1024){toast('รูปใหญ่เกิน 5MB ค่ะ');return;}
+  try{
+    toast('📤 กำลังส่งรูป...');
+    const imgRef=ref(storage,`chats/${activeChatId}/${Date.now()}_${file.name}`);
+    const snap=await uploadBytes(imgRef,file);
+    const url=await getDownloadURL(snap.ref);
+    await addDoc(collection(db,'chats',activeChatId,'messages'),{
+      from:user.uid, text:'📷 รูปภาพ', imageURL:url, ts:serverTimestamp()
+    });
+    await setDoc(doc(db,'chats',activeChatId),{lastMsg:'📷 รูปภาพ',lastFrom:user.uid},{merge:true});
+    input.value='';
+  }catch(e){toast('ส่งรูปไม่สำเร็จ: '+e.message);}
 };
 
 window.openChatWindow=async function(cid,otherUid,otherName,otherPhoto,score){
@@ -1612,7 +1687,18 @@ window.openChatWindow=async function(cid,otherUid,otherName,otherPhoto,score){
       const isMe=msg.from===user.uid;
       const ts=msg.ts?.toDate?msg.ts.toDate():new Date();
       const timeStr=(isMe?'คุณ':otherName)+' · '+ts.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
-      // Shared listing card
+      // Image message
+      if(msg.imageURL){
+        const imgWrap=document.createElement('div');
+        imgWrap.style.cssText=`align-self:${isMe?'flex-end':'flex-start'};max-width:60%;`;
+        imgWrap.innerHTML=`
+          <img src="${msg.imageURL}" style="max-width:100%;border-radius:12px;cursor:zoom-in;display:block;" onclick="openImgFull('${msg.imageURL}')" loading="lazy">
+          <div class="btime ${isMe?'btime-r':''}" style="margin-top:3px;">${timeStr}</div>`;
+        area2.appendChild(imgWrap);
+        return;
+      }
+
+      // Normal text message
       if(msg.listing){
         const lp=msg.listing;
         const cardWrap=document.createElement('div');
@@ -1643,13 +1729,26 @@ window.openChatWindow=async function(cid,otherUid,otherName,otherPhoto,score){
   });
 };
 
+window.openImgFull=function(url){
+  const lb=document.getElementById('lightbox');
+  window._lbPhotos=[url];window._lbIdx=0;
+  document.getElementById('lbImg').src=url;
+  document.getElementById('lbCounter').textContent='';
+  document.getElementById('lbDots').innerHTML='';
+  document.getElementById('lbPrev').style.display='none';
+  document.getElementById('lbNext').style.display='none';
+  lb.style.display='flex';
+  document.body.style.overflow='hidden';
+};
+
 window.sendChatMsg=async function(){
   const user=window._currentUser;if(!user||!activeChatId)return;
   const input=document.getElementById('chatMsgInput');
   const text=input.value.trim();if(!text)return;
   input.value='';
+  closePickers();
   await addDoc(collection(db,'chats',activeChatId,'messages'),{from:user.uid,text,ts:serverTimestamp()});
-  await setDoc(doc(db,'chats',activeChatId),{lastMsg:text,lastFrom:user.uid},{merge:true});
+  await setDoc(doc(db,'chats',activeChatId),{lastMsg:text,lastFrom:user.uid,lastUpdated:serverTimestamp()},{merge:true});
 };
 
 // ══════════════════
